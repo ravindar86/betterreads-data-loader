@@ -1,6 +1,8 @@
 package com.springboot.casandra.betterreadsdataloader;
 
+import com.springboot.casandra.betterreadsdataloader.model.AuthorBooks;
 import com.springboot.casandra.betterreadsdataloader.model.Book;
+import com.springboot.casandra.betterreadsdataloader.repository.AuthorBooksRepository;
 import com.springboot.casandra.betterreadsdataloader.repository.BookRepository;
 import com.springboot.casandra.connection.DataStaxAstraProperties;
 import com.springboot.casandra.betterreadsdataloader.model.Author;
@@ -38,11 +40,16 @@ public class BetterreadsDataLoaderApplication {
     @Autowired
     private BookRepository bookRepository;
 
+    @Autowired
+    private AuthorBooksRepository authorBooksRepository;
+
     @Value("${datadump.location.author}")
     private String authorDumpLocation;
 
     @Value("${datadump.location.works}")
     private String worksDumpLocation;
+
+    private List<AuthorBooks> authorBooksList = new ArrayList<>();
 
     public static void main(String[] args) {
         SpringApplication.run(BetterreadsDataLoaderApplication.class, args);
@@ -62,6 +69,9 @@ public class BetterreadsDataLoaderApplication {
         author.setPersonalName("new personal name");
 
         authorRepository.save(author); */
+
+
+
         System.out.println("Before calling initAuthors...");
         initAuthors();
         System.out.println("After calling initAuthors..");
@@ -70,6 +80,36 @@ public class BetterreadsDataLoaderApplication {
         initWorks();
         System.out.println("After calling initWorks..");
 
+        // SELECT * FROM book_by_id WHERE author_ids contains 'OWWW' ALLOW FILTERING;
+        initAuthorBooks();
+    }
+
+    private void initAuthorBooks(){
+
+        authorBooksList.stream().forEach(authorBooks -> {
+            if(authorBooks.getId()!=null) {
+                List<Book> bookList = bookRepository.findAllByAuthorIds(authorBooks.getId());
+                System.out.println(authorBooks.getId()+" Size::"+bookList.size());
+                  List<String> bookIds = new ArrayList<>();
+                List<String> bookNames = new ArrayList<>();
+                List<String> coverIds = new ArrayList<>();
+
+                for (Book book : bookList) {
+                    bookIds.add(book.getId());
+                    bookNames.add(book.getName());
+                    authorBooks.setCoverIds(book.getCoverIds());
+                }
+
+                if(bookIds.size()>0)
+                    authorBooks.setBookIds(bookIds);
+                if(bookNames.size()>0)
+                    authorBooks.setBookNames(bookNames);
+              //  if(coverIds.size()>0)
+                //    authorBooks.setCoverIds(coverIds);
+
+                authorBooksRepository.save(authorBooks);
+            }
+        });
     }
 
     private void initAuthors(){
@@ -87,6 +127,11 @@ public class BetterreadsDataLoaderApplication {
                     author.setId(jsonObject.optString("key").replace("/authors/",""));
                     author.setName(jsonObject.optString("name"));
                     author.setPersonalName(jsonObject.optString("personal_name"));
+
+                    final AuthorBooks authorBooks = new AuthorBooks();
+                    authorBooks.setId(author.getId());
+                    authorBooks.setName(author.getName());
+                    authorBooksList.add(authorBooks);
 
                     // Step 3: Save the author object
                     authorRepository.save(author);
